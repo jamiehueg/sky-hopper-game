@@ -3,16 +3,20 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sky Hopper — Playable Prototype</title>
+<title>Sky Hopper - Endless Hopper</title>
+<meta name="description" content="Tap to hop, collect coins, unlock characters and skies. Simple one tap controls with autosave. Music starts on first tap." />
 <style>
   :root{--bg:#87ceeb;--panel:#17324b;--accent:#ffd34d}
-  html,body{height:100%;margin:0;background:linear-gradient(#87ceeb,#a0d8ff);font-family:monospace;color:#07213a}
-  .wrap{max-width:980px;margin:18px auto;padding:14px;border-radius:8px;background:rgba(255,255,255,0.06);backdrop-filter: blur(4px)}
+  html,body{min-height:100%;margin:0;background:linear-gradient(#87ceeb,#a0d8ff);font-family:monospace;color:#07213a}
+  /* page container */
+  .wrap{max-width:1200px;margin:18px auto;padding:14px;border-radius:8px;background:rgba(255,255,255,0.06);backdrop-filter: blur(4px);box-sizing:border-box}
   header{display:flex;align-items:center;gap:12px}
   h1{font-size:20px;margin:0}
+  /* canvas responsive: keep aspect ratio and allow page scroll */
+  .canvas-wrap{width:100%;max-width:1200px;overflow:hidden}
   canvas{display:block;background:linear-gradient(#a6e0ff,#79c6ff);width:100%;height:auto;border-radius:8px;image-rendering:pixelated}
-  .row{display:flex;gap:12px;margin-top:12px}
-  .panel{background:#ffffff22;padding:10px;border-radius:8px;min-width:180px}
+  .row{display:flex;gap:12px;margin-top:12px;flex-wrap:wrap}
+  .panel{background:#ffffff22;padding:10px;border-radius:8px;min-width:180px;box-sizing:border-box}
   .small{font-size:12px;color:#042533}
   button{background:#07213a;color:var(--accent);border:0;padding:8px 10px;border-radius:6px;cursor:pointer}
   .shop-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0}
@@ -20,6 +24,10 @@
   .progress-bar{width:100%;height:12px;background:#07213a;border-radius:8px;overflow:hidden;margin-top:4px}
   .progress-bar>div{height:100%;background:var(--accent)}
   .badge{display:inline-block;padding:4px 6px;border-radius:6px;background:#ffffff22;margin-right:6px}
+  /* achievement popup */
+  .ach-toast{position:fixed;left:50%;transform:translateX(-50%);top:18px;background:#07213a;color:#ffd34d;padding:10px 14px;border-radius:6px;font-weight:700;display:none;z-index:999}
+  /* ensure the page can scroll when the canvas is large */
+  @media(min-width:900px){ .row{align-items:flex-start} }
 </style>
 </head>
 <body>
@@ -27,12 +35,15 @@
   <header>
     <div style="width:56px;height:56px;background:#07213a;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:700">SH</div>
     <div>
-      <h1>Sky Hopper — Playable Prototype</h1>
-      <div class="small">Tap to hop, collect coins, unlock characters & skies. Music starts on first tap.</div>
+      <h1>Sky Hopper</h1>
+      <div class="small">One tap to hop. Collect coins, avoid flyers, unlock characters and skies. Autosaves on play.</div>
     </div>
   </header>
 
-  <canvas id="game" width="800" height="420"></canvas>
+  <div class="canvas-wrap">
+    <!-- bigger default canvas size so game looks larger on the page -->
+    <canvas id="game" width="1024" height="576" aria-label="Sky Hopper game canvas"></canvas>
+  </div>
 
   <div class="row">
     <div class="panel" style="flex:1">
@@ -49,15 +60,15 @@
 
       <div class="small" style="margin-top:6px">Miles Progress</div>
       <div class="progress-bar"><div id="mileBar" style="width:0%"></div></div>
-      <div id="levelText" class="small" style="margin-top:4px">Level 1 — 0 / 500 miles</div>
+      <div id="levelText" class="small" style="margin-top:4px">Level 1 - 0 / 500 miles</div>
 
-      <div style="margin-top:8px;display:flex;gap:8px">
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
         <button id="startBtn">Start / Restart</button>
         <button id="muteBtn">Mute</button>
         <button id="shopBtn">Shop</button>
         <button id="achBtn">Achievements</button>
       </div>
-      <div id="hint" class="small" style="margin-top:8px">Tip: Tap or press Space to hop. Collect coins and avoid obstacles.</div>
+      <div id="hint" class="small" style="margin-top:8px">Tip: Tap or press Space to hop. Collect coins, power-ups, and avoid moving flyers.</div>
     </div>
 
     <div class="panel" style="width:320px;display:none" id="shopPanel">
@@ -79,190 +90,18 @@
     </div>
   </div>
 
-  <footer>Playable prototype: responsive, uses localStorage. If music doesn't start, tap the game area once to allow audio.</footer>
+  <footer>Playable prototype: responsive. Progress autosaves to localStorage and a fallback cookie. If music does not start, tap the game area once to allow audio.</footer>
 </div>
 
+<div id="achToast" class="ach-toast"></div>
+
 <script>
+/* Pixel hint */
+const PIXEL_SCALE = 2; // scale multiplier for pixel look
+
 // --- audio ---
 let audioCtx, masterGain; let soundOn = true;
 function ensureAudio(){
   try{
     if(!audioCtx){
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      masterGain = audioCtx.createGain();
-      masterGain.gain.value = 0.06;
-      masterGain.connect(audioCtx.destination);
-    }
-    if(audioCtx.state === 'suspended'){
-      audioCtx.resume().catch(()=>{});
-    }
-  }catch(e){
-    console.warn('Audio init failed', e);
-  }
-}
-function playTone(freq, time=0.12){ if(!soundOn) return; ensureAudio(); if(!audioCtx) return; const o = audioCtx.createOscillator(); o.type='square'; o.frequency.value=freq; o.connect(masterGain); o.start(); o.stop(audioCtx.currentTime + time); }
-
-// --- state ---
-const saved = JSON.parse(localStorage.getItem('skyhopper-expanded') || '{}');
-const state = {
-  coins: saved.coins || 0,
-  best: saved.best || 0,
-  miles: saved.miles || 0,
-  level: saved.level || 1,
-  nextLevel: saved.nextLevel || 500,
-  unlockedChars: saved.unlockedChars || ['Retro Bird'],
-  equippedChar: saved.equippedChar || 'Retro Bird',
-  unlockedPowers: saved.unlockedPowers || {magnet:false,shield:false,double:false,autoglide:false},
-  unlockedEnv: saved.unlockedEnv || ['Day Sky'],
-  equippedEnv: saved.equippedEnv || 'Day Sky',
-  achievements: saved.achievements || {}
-};
-function saveState(){ localStorage.setItem('skyhopper-expanded', JSON.stringify(state)); }
-
-// --- DOM refs ---
-const canvas = document.getElementById('game'); const ctx = canvas.getContext('2d');
-const scoreEl = document.getElementById('score'); const coinsEl = document.getElementById('coins'); const shopCoinsEl = document.getElementById('shopCoins');
-const startBtn = document.getElementById('startBtn'); const muteBtn = document.getElementById('muteBtn'); const shopBtn = document.getElementById('shopBtn'); const achBtn = document.getElementById('achBtn');
-const shopPanel = document.getElementById('shopPanel'); const achPanel = document.getElementById('achPanel'); const shopChars = document.getElementById('shopChars'); const shopPowers = document.getElementById('shopPowers'); const shopEnv = document.getElementById('shopEnv'); const achList = document.getElementById('achList');
-const mileBar = document.getElementById('mileBar'); const levelText = document.getElementById('levelText');
-
-// --- game settings ---
-const SETTINGS = { gravity: 1000, flap: -350, speed: 200, spawnInterval: 1400, coinValue: 1 };
-
-// --- shop data ---
-const CHARACTERS = [
-  {name:'Retro Bird',cost:0}, {name:'Rocket Cat',cost:200}, {name:'Ninja Cloud',cost:300}, {name:'Airplane Ace',cost:400},
-  {name:'Hot Air Buddy',cost:500}, {name:'Sky Whale',cost:800}, {name:'Meteor Bot',cost:1000}, {name:'Phoenix',cost:1500},
-  {name:'Thunder Crow',cost:2000}, {name:'Storm Dragon',cost:4000}
-];
-const POWERS = [ {id:'magnet',name:'Magnet (10s)',cost:100}, {id:'shield',name:'Shield (1 hit)',cost:150}, {id:'double',name:'Double Coins (12s)',cost:200}, {id:'autoglide',name:'Auto Glide (12s)',cost:400} ];
-const ENVS = [ {name:'Day Sky',cost:0}, {name:'Sunset Drift',cost:150}, {name:'Night Flight',cost:200}, {name:'Stormy Skies',cost:250}, {name:'Aurora Heights',cost:300}, {name:'Galaxy Zone',cost:350}, {name:"Heaven's Gate",cost:400} ];
-
-// --- achievements list ---
-const ACHS = [
-  'First Flight','Coin Collector','Treasure Hunter','Marathon Flyer','Endless Spirit','Near Miss','Magnetized','Unbreakable','Smooth Glide','Golden Touch','Fashion Flyer','Sky Crew','Legendary Wings','Cloud Chaser','Celestial Traveler','Flawless Flight','Storm Surfer','Lucky Glide','Pilot of the Century','True Sky Hopper'
-];
-
-// --- runtime game ---
-let game = { running:false, player:{x:140,y:200,w:20,h:16,vy:0}, obstacles:[], coins:[], lastSpawn:0, distance:0, magnetTimer:0, shieldActive:false };
-
-function resetRun(){ game.running=false; game.obstacles=[]; game.coins=[]; game.player.y = canvas.height/2; game.player.vy = 0; game.lastSpawn = 0; game.distance = 0; game.magnetTimer = 0; game.shieldActive = false; updateUI(); }
-resetRun();
-
-function startRun(){ resetRun(); game.running=true; playTone(660,0.06); }
-
-function endRun(){ game.running=false; // record miles from distance
-  const milesEarned = Math.floor(game.distance/100);
-  if(milesEarned>0){ state.miles += milesEarned; checkLevelUp(); }
-  saveState(); playTone(220,0.2);
-}
-
-function checkLevelUp(){ while(state.miles >= state.nextLevel){ state.miles -= state.nextLevel; state.level++; state.nextLevel = Math.floor(state.nextLevel * 1.2) + 500; // scaling
-    // reward
-    state.coins += 100; // guaranteed reward
-    showPopup('Level ' + state.level + ' reached! +100 coins'); }
-  updateUI(); }
-
-function showPopup(text){ // simple alert-styled popup
-  console.log(text);
-}
-
-function updateUI(){ scoreEl.textContent = Math.floor(game.distance/10); coinsEl.textContent = Math.floor(state.coins); shopCoinsEl.textContent = Math.floor(state.coins);
-  const percent = (state.miles / state.nextLevel) * 100; mileBar.style.width = Math.min(100, percent) + '%'; levelText.textContent = `Level ${state.level} — ${state.miles}/${state.nextLevel} miles`; }
-
-// --- shop rendering and buying ---
-function renderShop(){ shopChars.innerHTML=''; CHARACTERS.forEach(ch=>{ const d=document.createElement('div'); d.className='shop-item'; d.innerHTML=`<span>${ch.name} - ${ch.cost}c</span>`; const b=document.createElement('button'); const owned = state.unlockedChars.includes(ch.name); b.textContent = owned ? 'Owned' : 'Buy'; b.disabled = owned; b.onclick = ()=>{ if(!owned) buyChar(ch); else equipChar(ch); }; d.appendChild(b); shopChars.appendChild(d); });
-  shopPowers.innerHTML=''; POWERS.forEach(p=>{ const d=document.createElement('div'); d.className='shop-item'; d.innerHTML=`<span>${p.name} - ${p.cost}c</span>`; const b=document.createElement('button'); const owned = state.unlockedPowers[p.id]; b.textContent = owned ? 'Owned' : 'Buy'; b.disabled = owned; b.onclick = ()=>buyPower(p); d.appendChild(b); shopPowers.appendChild(d); });
-  shopEnv.innerHTML=''; ENVS.forEach(e=>{ const d=document.createElement('div'); d.className='shop-item'; d.innerHTML=`<span>${e.name} - ${e.cost}c</span>`; const b=document.createElement('button'); const owned = state.unlockedEnv.includes(e.name); b.textContent = owned ? 'Owned' : 'Buy'; b.disabled = owned; b.onclick = ()=>buyEnv(e); d.appendChild(b); shopEnv.appendChild(d); }); }
-
-function buyChar(ch){ if(state.coins < ch.cost) return alert('Not enough coins'); state.coins -= ch.cost; state.unlockedChars.push(ch.name); state.equippedChar = ch.name; saveState(); renderShop(); updateUI(); playTone(880,0.1); }
-function equipChar(ch){ state.equippedChar = ch.name; saveState(); updateUI(); }
-function buyPower(p){ if(state.coins < p.cost) return alert('Not enough coins'); state.coins -= p.cost; state.unlockedPowers[p.id] = true; saveState(); renderShop(); updateUI(); playTone(880,0.1); }
-function buyEnv(e){ if(state.coins < e.cost) return alert('Not enough coins'); state.coins -= e.cost; state.unlockedEnv.push(e.name); state.equippedEnv = e.name; saveState(); renderShop(); updateUI(); playTone(880,0.1); }
-
-// --- spawning obstacles & coins ---
-function spawnObstacle(){ const gap = 120; const min = 60; const max = canvas.height - 80 - gap; const top = min + Math.random() * (max - min); const obs = {x: canvas.width + 40, w: 56, gapY: top, gap: gap}; game.obstacles.push(obs);
-  // coin cluster
-  if(Math.random() < 0.9){ game.coins.push({x: canvas.width + 40 + 28, y: top + gap/2, r:8, value:1}); }
-}
-
-// collision helpers
-function rectIntersect(a,b){ return !(a.x > b.x + b.w || a.x + a.w < b.x || a.y > b.y + b.h || a.y + a.h < b.y); }
-function circleRectIntersect(c, r){ const cx = Math.max(r.x, Math.min(c.x, r.x + r.w)); const cy = Math.max(r.y, Math.min(c.y, r.y + r.h)); const dx = c.x - cx; const dy = c.y - cy; return (dx*dx + dy*dy) < (c.r*c.r); }
-
-// --- input ---
-function flap(){ if(!game.running) startRun(); game.player.vy = SETTINGS.flap; playTone(880,0.06); }
-canvas.addEventListener('mousedown', (e)=>{ ensureAudio(); flap(); });
-window.addEventListener('keydown', (e)=>{ if(e.code === 'Space'){ e.preventDefault(); ensureAudio(); flap(); } });
-
-// --- update loop ---
-function update(dt){ if(!game.running) return; // spawn
-  game.lastSpawn += dt; if(game.lastSpawn > SETTINGS.spawnInterval){ game.lastSpawn = 0; spawnObstacle(); }
-  // move obstacles & coins
-  for(let i=game.obstacles.length-1;i>=0;i--){ const o = game.obstacles[i]; o.x -= SETTINGS.speed * dt/1000; if(o.x + o.w < -50) game.obstacles.splice(i,1); }
-  for(let i=game.coins.length-1;i>=0;i--){ const c = game.coins[i]; c.x -= SETTINGS.speed * dt/1000; if(c.x < -40) game.coins.splice(i,1); }
-  // physics
-  game.player.vy += SETTINGS.gravity * dt/1000; game.player.y += game.player.vy * dt/1000;
-  if(game.player.y < 6) { game.player.y = 6; game.player.vy = 0; }
-  if(game.player.y + game.player.h > canvas.height - 10){ // ground hit
-    if(game.shieldActive){ game.shieldActive = false; playTone(330,0.08); } else { endRun(); return; }
-  }
-  // collisions
-  for(const o of game.obstacles){ if(game.player.x + game.player.w > o.x && game.player.x < o.x + o.w){ const topRect = {x:o.x,y:0,w:o.w,h:o.gapY}; const botRect = {x:o.x,y:o.gapY+o.gap,w:o.w,h:canvas.height - (o.gapY + o.gap)}; if(rectIntersect(game.player, topRect) || rectIntersect(game.player, botRect)){ if(game.shieldActive){ game.shieldActive = false; playTone(330,0.08); } else { endRun(); return; } } } }
-  // coin collection
-  for(let i=game.coins.length-1;i>=0;i--){ const c=game.coins[i]; if(circleRectIntersect({x:c.x,y:c.y,r:c.r}, game.player)){ // collect
-      const val = c.value * (game.magnetTimer > 0 ? 2 : 1); state.coins += val; game.coins.splice(i,1); playTone(1320,0.04); } else if(game.magnetTimer > 0){ // attract
-      const dx = (game.player.x + game.player.w/2) - c.x; const dy = (game.player.y + game.player.h/2) - c.y; const dist = Math.sqrt(dx*dx+dy*dy); if(dist < 220){ c.x += dx * 300 * dt/1000 / Math.max(dist,20); c.y += dy * 300 * dt/1000 / Math.max(dist,20); } } }
-  // timers
-  if(game.magnetTimer > 0) game.magnetTimer -= dt; if(game.magnetTimer < 0) game.magnetTimer = 0;
-  // distance
-  game.distance += SETTINGS.speed * dt/1000; updateUI(); }
-
-function draw(){ // background
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  // environment tint
-  if(state.equippedEnv === 'Sunset Drift'){ ctx.fillStyle='#ffd8b3'; } else if(state.equippedEnv === 'Night Flight'){ ctx.fillStyle='#1a2b4a'; } else if(state.equippedEnv === 'Stormy Skies'){ ctx.fillStyle='#7f8c8d'; } else if(state.equippedEnv === 'Aurora Heights'){ ctx.fillStyle='#b3ffef'; } else if(state.equippedEnv === 'Galaxy Zone'){ ctx.fillStyle='#0b1020'; } else if(state.equippedEnv === "Heaven's Gate"){ ctx.fillStyle='#fff3d9'; } else { ctx.fillStyle='#a6e0ff'; }
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-  // clouds parallax
-  ctx.fillStyle='rgba(255,255,255,0.9)'; for(let i=0;i<6;i++){ const x = (i*200 + (performance.now()/40) * (i%2?0.7:1.0)) % (canvas.width+200) - 100; ctx.beginPath(); ctx.ellipse(x, 60 + (i%3)*12, 48,20,0,0,Math.PI*2); ctx.ellipse(x+30, 70 + (i%3)*12, 36,16,0,0,Math.PI*2); ctx.fill(); }
-  // obstacles
-  ctx.fillStyle='#2b6a9a'; for(const o of game.obstacles){ ctx.fillRect(Math.floor(o.x), 0, o.w, o.gapY); ctx.fillRect(Math.floor(o.x), Math.floor(o.gapY + o.gap), o.w, canvas.height - (o.gapY + o.gap)); }
-  // coins
-  for(const c of game.coins){ ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI*2); ctx.fillStyle='#ffd34d'; ctx.fill(); ctx.closePath(); ctx.fillStyle='#b07b1f'; ctx.fillRect(c.x-4, c.y-1, 8,2); }
-  // player sprite
-  drawPlayer();
-  // HUD
-  ctx.fillStyle='#07213a'; ctx.font='14px monospace'; ctx.fillText('Best: '+state.best, 10, 18);
-  if(!game.running){ ctx.fillStyle='rgba(7,33,58,0.6)'; ctx.fillRect(canvas.width/2 - 160, canvas.height/2 - 40, 320, 80); ctx.fillStyle='#fff'; ctx.font='16px monospace'; ctx.fillText('Tap or Space to Start', canvas.width/2 - 100, canvas.height/2); }
-}
-
-function drawPlayer(){ const p = game.player; let col = '#3b82f6'; if(state.equippedChar === 'Rocket Cat') col = '#f54e42'; if(state.equippedChar === 'Ninja Cloud') col = '#7f8c8d'; if(state.equippedChar === 'Airplane Ace') col = '#ffcc00'; if(state.equippedChar === 'Hot Air Buddy') col = '#ff7bac'; if(state.equippedChar === 'Sky Whale') col = '#6bb3ff'; if(state.equippedChar === 'Meteor Bot') col = '#d0d0d0'; if(state.equippedChar === 'Phoenix') col = '#ff8c00'; ctx.fillStyle = col; ctx.fillRect(p.x, p.y, p.w, p.h); ctx.fillStyle='#fff'; ctx.fillRect(p.x + Math.floor(p.w*0.6), p.y + 3, 3,3); if(game.shieldActive){ ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x + p.w/2, p.y + p.h/2, 20, 0, Math.PI*2); ctx.stroke(); }}
-
-// main loop
-let last = performance.now(); function loop(now){ const dt = now - last; update(dt); draw(); last = now; requestAnimationFrame(loop); } requestAnimationFrame(loop);
-
-// responsive
-function resize(){ const w = Math.min(window.innerWidth - 40, 1000); canvas.style.width = w + 'px'; } window.addEventListener('resize', resize); resize();
-
-// input handlers
-startBtn.addEventListener('click', ()=>{ startRun(); });
-muteBtn.addEventListener('click', ()=>{ soundOn = !soundOn; muteBtn.textContent = soundOn ? 'Mute' : 'Unmute'; });
-shopBtn.addEventListener('click', ()=>{ shopPanel.style.display = shopPanel.style.display === 'none' ? 'block' : 'none'; renderShop(); });
-achBtn.addEventListener('click', ()=>{ achPanel.style.display = achPanel.style.display === 'none' ? 'block' : 'none'; renderAchievements(); });
-
-// tap/flap
-function flap(){ if(!game.running) startRun(); game.player.vy = SETTINGS.flap; playTone(880,0.06); }
-canvas.addEventListener('mousedown', (e)=>{ ensureAudio(); flap(); }); window.addEventListener('keydown', (e)=>{ if(e.code === 'Space'){ e.preventDefault(); ensureAudio(); flap(); } });
-
-// shop helpers
-function renderAchievements(){ achList.innerHTML = ''; ACHS.forEach(a=>{ const li = document.createElement('li'); li.textContent = a; li.style.color = state.achievements[a] ? '#ffd34d' : '#fff'; achList.appendChild(li); }); }
-
-// expose small quick-buy for testing
-function grantTestCoins(n=500){ state.coins += n; saveState(); updateUI(); }
-
-// initial render
-renderShop(); renderAchievements(); updateUI();
-
-</script>
-</body>
-</html>
+      audioCtx = new (window.AudioContext || window
