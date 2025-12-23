@@ -11,7 +11,7 @@ A lightweight endless hopping prototype made with HTML5 Canvas and JavaScript.
 - Progress, best score, and achievements are saved locally.
 
 **Play now:**  
-👉 [Sky Hopper on GitHub Pages](https://jamieheiden.github.io/sky-hopper-game/)
+👉 [Sky Hopper on GitHub Pages](https://jamiehueg.github.io/sky-hopper-game/)
 
 **Features**
 - Pixel-style visuals  
@@ -21,4 +21,4 @@ A lightweight endless hopping prototype made with HTML5 Canvas and JavaScript.
 
 ---
 
-Made by Jamie Heiden.
+Made by Jamie.
