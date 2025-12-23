@@ -1,24 +1,20 @@
 # Sky Hopper
 
-A lightweight endless hopping prototype made with HTML5 Canvas and JavaScript.
+Sky Hopper is a simple, retro-style endless flying game.
 
-**Gameplay**
-- Tap or press Space to hop.
-- Collect coins and avoid obstacles.
-- Power-ups like Magnet and Shield appear early to help new players.
-- Coins increase in value every 500 score.
-- Distractions (birds and planes) appear after 1500 score to raise difficulty.
-- Progress, best score, and achievements are saved locally.
+Tap or press Space to fly, avoid obstacles, and try to beat your highest score.  
+Your best score saves automatically in your browser.
 
-**Play now:**  
-👉 [Sky Hopper on GitHub Pages](https://jamiehueg.github.io/sky-hopper-game/)
+## Play the Game
+👉 https://jamiehueg.itch.io/sky-hopper
 
-**Features**
-- Pixel-style visuals  
-- Local autosave system  
-- Responsive for mobile and desktop  
-- Simple one-button control  
+## Controls
+- Tap the screen
+- Press Space
 
----
+## Tech
+- HTML5 Canvas
+- JavaScript
+- Browser-based (no backend)
 
-Made by Jamie.
+This repository contains the source code for the game.
