@@ -3,105 +3,135 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sky Hopper - Endless Hopper</title>
-<meta name="description" content="Tap to hop, collect coins, unlock characters and skies. Simple one tap controls with autosave. Music starts on first tap." />
+<title>Sky Hopper</title>
+<meta name="description" content="A simple flappy-style game. Progress autosaves in your browser." />
 <style>
-  :root{--bg:#87ceeb;--panel:#17324b;--accent:#ffd34d}
-  html,body{min-height:100%;margin:0;background:linear-gradient(#87ceeb,#a0d8ff);font-family:monospace;color:#07213a}
-  /* page container */
-  .wrap{max-width:1200px;margin:18px auto;padding:14px;border-radius:8px;background:rgba(255,255,255,0.06);backdrop-filter: blur(4px);box-sizing:border-box}
-  header{display:flex;align-items:center;gap:12px}
-  h1{font-size:20px;margin:0}
-  /* canvas responsive: keep aspect ratio and allow page scroll */
-  .canvas-wrap{width:100%;max-width:1200px;overflow:hidden}
-  canvas{display:block;background:linear-gradient(#a6e0ff,#79c6ff);width:100%;height:auto;border-radius:8px;image-rendering:pixelated}
-  .row{display:flex;gap:12px;margin-top:12px;flex-wrap:wrap}
-  .panel{background:#ffffff22;padding:10px;border-radius:8px;min-width:180px;box-sizing:border-box}
-  .small{font-size:12px;color:#042533}
-  button{background:#07213a;color:var(--accent);border:0;padding:8px 10px;border-radius:6px;cursor:pointer}
-  .shop-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0}
-  footer{margin-top:12px;font-size:12px;color:#042533}
-  .progress-bar{width:100%;height:12px;background:#07213a;border-radius:8px;overflow:hidden;margin-top:4px}
-  .progress-bar>div{height:100%;background:var(--accent)}
-  .badge{display:inline-block;padding:4px 6px;border-radius:6px;background:#ffffff22;margin-right:6px}
-  /* achievement popup */
-  .ach-toast{position:fixed;left:50%;transform:translateX(-50%);top:18px;background:#07213a;color:#ffd34d;padding:10px 14px;border-radius:6px;font-weight:700;display:none;z-index:999}
-  /* ensure the page can scroll when the canvas is large */
-  @media(min-width:900px){ .row{align-items:flex-start} }
+  html,body{margin:0;padding:0;background:#7fc7ff;font-family:monospace}
+  .wrap{max-width:900px;margin:0 auto;padding:12px}
+  h1{text-align:center;margin:8px 0}
+  canvas{display:block;width:100%;height:auto;border-radius:8px;image-rendering:pixelated;background:#9fd9ff}
+  .hud{display:flex;justify-content:space-between;margin:6px 0;font-size:14px}
+  .center{text-align:center;margin-top:6px;color:#042533}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <div style="width:56px;height:56px;background:#07213a;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:700">SH</div>
-    <div>
-      <h1>Sky Hopper</h1>
-      <div class="small">One tap to hop. Collect coins, avoid flyers, unlock characters and skies. Autosaves on play.</div>
-    </div>
-  </header>
-
-  <div class="canvas-wrap">
-    <!-- bigger default canvas size so game looks larger on the page -->
-    <canvas id="game" width="1024" height="576" aria-label="Sky Hopper game canvas"></canvas>
+  <h1>Sky Hopper</h1>
+  <div class="hud">
+    <div>Score: <span id="score">0</span></div>
+    <div>Highest score: <span id="best">0</span></div>
   </div>
-
-  <div class="row">
-    <div class="panel" style="flex:1">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div class="small">Score</div>
-          <div id="score" style="font-weight:700;font-size:20px">0</div>
-        </div>
-        <div style="text-align:right">
-          <div class="small">Coins</div>
-          <div id="coins" style="font-weight:700;font-size:20px">0</div>
-        </div>
-      </div>
-
-      <div class="small" style="margin-top:6px">Miles Progress</div>
-      <div class="progress-bar"><div id="mileBar" style="width:0%"></div></div>
-      <div id="levelText" class="small" style="margin-top:4px">Level 1 - 0 / 500 miles</div>
-
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-        <button id="startBtn">Start / Restart</button>
-        <button id="muteBtn">Mute</button>
-        <button id="shopBtn">Shop</button>
-        <button id="achBtn">Achievements</button>
-      </div>
-      <div id="hint" class="small" style="margin-top:8px">Tip: Tap or press Space to hop. Collect coins, power-ups, and avoid moving flyers.</div>
-    </div>
-
-    <div class="panel" style="width:320px;display:none" id="shopPanel">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div class="small">Shop</div>
-        <div class="small">Coins: <span id="shopCoins">0</span></div>
-      </div>
-      <div style="margin-top:6px;font-size:13px"><b>Characters</b></div>
-      <div id="shopChars"></div>
-      <div style="margin-top:6px;font-size:13px"><b>Power-ups (one-time buy)</b></div>
-      <div id="shopPowers"></div>
-      <div style="margin-top:6px;font-size:13px"><b>Environments</b></div>
-      <div id="shopEnv"></div>
-    </div>
-
-    <div class="panel" style="width:260px;display:none" id="achPanel">
-      <div class="small">Achievements</div>
-      <ul id="achList" style="font-size:13px;margin-top:6px;padding-left:20px"></ul>
-    </div>
-  </div>
-
-  <footer>Playable prototype: responsive. Progress autosaves to localStorage and a fallback cookie. If music does not start, tap the game area once to allow audio.</footer>
+  <canvas id="game" width="800" height="500"></canvas>
+  <div class="center">Tap or press Space to fly</div>
 </div>
 
-<div id="achToast" class="ach-toast"></div>
-
 <script>
-/* Pixel hint */
-const PIXEL_SCALE = 2; // scale multiplier for pixel look
+// ===== Simple Flappy Bird–style Sky Hopper =====
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
 
-// --- audio ---
-let audioCtx, masterGain; let soundOn = true;
-function ensureAudio(){
-  try{
-    if(!audioCtx){
-      audioCtx = new (window.AudioContext || window
+const STORAGE_KEY = 'skyhopper-simple-best';
+let bestScore = Number(localStorage.getItem(STORAGE_KEY) || 0);
+bestEl.textContent = bestScore;
+
+const GRAVITY = 1200;
+const FLAP = -420;
+const SPEED = 220;
+const GAP = 220;
+const PIPE_WIDTH = 80;
+const SPAWN_INTERVAL = 1500;
+
+let player, pipes, score, running, lastSpawn, lastTime;
+
+function reset(){
+  player = { x: 160, y: canvas.height/2, vy: 0, w: 28, h: 20 };
+  pipes = [];
+  score = 0;
+  running = false;
+  lastSpawn = 0;
+  scoreEl.textContent = 0;
+}
+
+function start(){ reset(); running = true; }
+
+function spawnPipe(){
+  const minTop = 40;
+  const maxTop = canvas.height - GAP - 40;
+  const gapY = minTop + Math.random() * (maxTop - minTop);
+  pipes.push({ x: canvas.width + 60, gapY });
+}
+
+function update(dt){
+  if(!running) return;
+
+  lastSpawn += dt;
+  if(lastSpawn > SPAWN_INTERVAL){ lastSpawn = 0; spawnPipe(); }
+
+  // player physics
+  player.vy += GRAVITY * dt/1000;
+  player.y += player.vy * dt/1000;
+
+  // pipes
+  for(let i=pipes.length-1;i>=0;i--){
+    pipes[i].x -= SPEED * dt/1000;
+    if(pipes[i].x + PIPE_WIDTH < 0){ pipes.splice(i,1); score++; scoreEl.textContent = score; }
+  }
+
+  // collisions
+  if(player.y < 0 || player.y + player.h > canvas.height){ end(); }
+
+  for(const p of pipes){
+    if(player.x + player.w > p.x && player.x < p.x + PIPE_WIDTH){
+      if(player.y < p.gapY || player.y + player.h > p.gapY + GAP){ end(); }
+    }
+  }
+}
+
+function end(){
+  running = false;
+  if(score > bestScore){ bestScore = score; localStorage.setItem(STORAGE_KEY, bestScore); bestEl.textContent = bestScore; }
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // background
+  const bg = ctx.createLinearGradient(0,0,0,canvas.height);
+  bg.addColorStop(0,'#bfe9ff');
+  bg.addColorStop(1,'#7fc7ff');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // pipes (simple sky pillars)
+  ctx.fillStyle = '#3b6ea5';
+  for(const p of pipes){
+    ctx.fillRect(p.x, 0, PIPE_WIDTH, p.gapY);
+    ctx.fillRect(p.x, p.gapY + GAP, PIPE_WIDTH, canvas.height);
+  }
+
+  // player (simple bird)
+  ctx.fillStyle = '#e33a2b';
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+}
+
+function loop(ts){
+  if(!lastTime) lastTime = ts;
+  const dt = ts - lastTime;
+  lastTime = ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+function flap(){ if(!running) start(); player.vy = FLAP; }
+
+canvas.addEventListener('mousedown', flap);
+window.addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); flap(); }});
+
+reset();
+</script>
+</body>
+</html>
